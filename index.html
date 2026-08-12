@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Plate Tracker">
+<title>License Plate Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+:root{
+  color-scheme: light dark;
+  --blue:#2f6fb0; --blue-light:#E6F1FB; --blue-dark:#0C447C;
+  --bg:#ffffff; --bg2:#f4f5f7; --border:#e2e4e8; --border2:#d4d7dc;
+  --text:#1a1d23; --text2:#6b7280;
+  --name-color:#111318;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --blue:#5b9bd5; --blue-light:#1a3a5c; --blue-dark:#a8cdf0;
+    --bg:#16181d; --bg2:#23262d; --border:#33373f; --border2:#454a54;
+    --text:#f0f1f3; --text2:#a5abb6;
+    --name-color:#f5f6f8;
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);overscroll-behavior:none}
+.header{display:flex;align-items:center;gap:10px;padding:14px 16px;padding-top:max(14px, env(safe-area-inset-top));border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:10}
+.header h1{font-size:16px;font-weight:600;flex:1}
+.header-icon{width:22px;height:22px;color:var(--blue)}
+.screen{display:none;padding-bottom:70px;min-height:100vh}
+.screen.active{display:block}
+.nav-bar{display:flex;border-top:1px solid var(--border);position:fixed;bottom:0;left:0;right:0;background:var(--bg);z-index:10;padding-bottom:env(safe-area-inset-bottom)}
+.nav-btn{flex:1;padding:9px 4px 8px;font-size:11px;color:var(--text2);background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;font-family:inherit}
+.nav-btn svg{width:21px;height:21px}
+.nav-btn.active{color:var(--blue)}
+.btn{background:transparent;border:1px solid var(--border2);border-radius:10px;padding:8px 16px;font-size:14px;cursor:pointer;color:var(--text);font-family:inherit}
+.btn-primary{background:var(--blue-light);color:var(--blue-dark);border-color:var(--blue)}
+.game-card{background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:12px}
+.game-card.sel{border:2px solid var(--blue)}
+.prog-bar{height:5px;background:var(--bg2);border-radius:3px;margin-top:6px;overflow:hidden}
+.prog-fill{height:100%;background:var(--blue);border-radius:3px;transition:width 0.3s}
+.stat-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:14px 16px 8px}
+.stat-card{background:var(--bg2);border-radius:12px;padding:12px 14px}
+.stat-label{font-size:11px;color:var(--text2);font-weight:500;text-transform:uppercase;letter-spacing:.04em}
+.stat-val{font-size:24px;font-weight:700;margin-top:2px}
+.map-wrap{padding:6px 10px 10px}
+.map-wrap svg{width:100%;height:auto;display:block}
+.fact-panel{margin:0 16px 10px;border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+.fact-header{padding:14px 16px;background:var(--bg2);display:flex;align-items:center;gap:12px}
+.fact-abbr{width:44px;height:44px;border-radius:12px;background:var(--blue-light);color:var(--blue-dark);font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fact-name{font-size:16px;font-weight:600}
+.fact-status{font-size:12px;color:var(--text2);margin-top:2px}
+.plate-section{padding:14px 16px;border-bottom:1px solid var(--border)}
+.plate-section-label{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;font-weight:500}
+.plate-svg-wrap{border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.12)}
+.fact-body{padding:6px 16px 10px}
+.fact-row{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:14px}
+.fact-row:last-child{border-bottom:none}
+.fact-key{color:var(--text2);min-width:84px;flex-shrink:0;font-size:13px;font-weight:500}
+.fact-val{color:var(--text);line-height:1.4}
+.spot-btn{margin:10px 16px 16px;width:calc(100% - 32px);padding:12px;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;border:1.5px solid var(--border2);background:transparent;color:var(--text);font-family:inherit}
+.spot-btn.on{background:var(--blue-light);color:var(--blue-dark);border-color:var(--blue)}
+.state-list{padding:0 16px}
+.state-item{display:flex;align-items:center;gap:14px;padding:15px 12px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;border-radius:10px;margin-bottom:2px}
+.state-item.found-row{background:var(--blue-light)}
+.state-item:last-child{border-bottom:none}
+.state-check{width:28px;height:28px;border-radius:50%;border:2.5px solid var(--border2);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.15s}
+.state-check.on{background:var(--blue);border-color:var(--blue)}
+.state-check svg{width:16px;height:16px;color:#fff}
+.state-item-name{flex:1;font-size:19px;font-weight:600;color:var(--name-color)}
+.state-item.found-row .state-item-name{color:var(--blue-dark)}
+.state-item-abbr{font-size:14px;color:var(--text2);min-width:30px;text-align:right;font-weight:600}
+.search-wrap{padding:12px 16px 8px}
+.search-wrap input{width:100%;padding:10px 14px;border:1px solid var(--border2);border-radius:10px;font-size:15px;background:var(--bg);color:var(--text);font-family:inherit}
+.search-wrap input:focus{outline:none;border-color:var(--blue)}
+.fab{position:fixed;bottom:78px;right:16px;width:52px;height:52px;border-radius:50%;background:var(--blue);color:white;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:20;box-shadow:0 2px 8px rgba(47,111,176,0.4)}
+.fab svg{width:24px;height:24px}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:30;align-items:center;justify-content:center;padding:24px}
+.overlay.open{display:flex}
+.modal{background:var(--bg);border-radius:18px;padding:20px;width:100%;max-width:320px}
+.modal h2{font-size:16px;font-weight:600;margin-bottom:14px}
+.modal input{width:100%;padding:10px 14px;border:1px solid var(--border2);border-radius:10px;font-size:15px;background:var(--bg);color:var(--text);margin-bottom:14px;font-family:inherit}
+.modal input:focus{outline:none;border-color:var(--blue)}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end}
+.empty{text-align:center;padding:60px 24px;color:var(--text2);font-size:14px}
+.empty svg{width:44px;height:44px;display:block;margin:0 auto 12px;color:var(--border2)}
+.sec-label{padding:14px 16px 6px;font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+.delete-btn{background:none;border:none;cursor:pointer;color:var(--text2);padding:4px}
+.delete-btn svg{width:18px;height:18px}
+.map-loading{text-align:center;padding:40px;color:var(--text2);font-size:13px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <svg class="header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="7" cy="12" r="1"/><circle cx="17" cy="12" r="1"/><path d="M2 12h20"/></svg>
+  <h1 id="hdr-title">License Plate Tracker</h1>
+</div>
+
+<div class="screen active" id="scr-games">
+  <div class="sec-label">Your games</div>
+  <div style="padding:4px 16px 16px" id="games-list"></div>
+  <div class="empty" id="games-empty" style="display:none">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6-13l6 3m0 0l5.447-2.724A1 1 0 0 1 21 5.618v10.764a1 1 0 0 1-.553.894L15 20m0-13v13M9 7v13"/></svg>
+    No games yet — tap + to start one!
+  </div>
+  <button class="fab" onclick="openModal()" aria-label="New game">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+  </button>
+</div>
+
+<div class="screen" id="scr-map">
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-label">Found</div><div class="stat-val" id="map-found">0</div></div>
+    <div class="stat-card"><div class="stat-label">Remaining</div><div class="stat-val" id="map-left">51</div></div>
+  </div>
+  <div class="map-wrap"><svg id="us-svg" viewBox="0 0 975 610" xmlns="http://www.w3.org/2000/svg"></svg></div>
+  <div id="fact-map"></div>
+</div>
+
+<div class="screen" id="scr-states">
+  <div class="search-wrap"><input type="text" id="state-search" placeholder="Search states…" oninput="renderStates()"></div>
+  <div class="state-list" id="state-list"></div>
+</div>
+
+<div class="nav-bar" id="nav-bar" style="display:none">
+  <button class="nav-btn active" id="nb-games" onclick="showScr('games')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+    Games
+  </button>
+  <button class="nav-btn" id="nb-map" onclick="showScr('map')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6-13l6 3m0 0l5.447-2.724A1 1 0 0 1 21 5.618v10.764a1 1 0 0 1-.553.894L15 20m0-13v13M9 7v13"/></svg>
+    Map
+  </button>
+  <button class="nav-btn" id="nb-states" onclick="showScr('states')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="7" cy="12" r="1"/><circle cx="17" cy="12" r="1"/><path d="M2 12h20"/></svg>
+    States
+  </button>
+</div>
+
+<div class="overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h2>New game</h2>
+    <input id="modal-input" type="text" placeholder="e.g. Summer road trip 2026" maxlength="40" onkeydown="if(event.key==='Enter')createGame()">
+    <div class="modal-btns">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="createGame()">Create</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== Plate visual designs =====
+const PLATES = {
+  AL:{bg:"#fff",border:"#c0392b",tc:"#c0392b",ac:"#c0392b",sl:"Heart of Dixie"},
+  AK:{bg:"#ffd700",border:"#003087",tc:"#003087",ac:"#003087",sl:"The Last Frontier"},
+  AZ:{bg:"#cc7722",border:"#003087",tc:"#003087",ac:"#cc3300",sl:"Grand Canyon State"},
+  AR:{bg:"#fff",border:"#003087",tc:"#003087",ac:"#cc0000",sl:"The Natural State"},
+  CA:{bg:"#fff",border:"#003087",tc:"#003087",ac:"#003087",sl:"California"},
+  CO:{bg:"#fff",border:"#003087",tc:"#003087",ac:"#228b22",sl:"Colorful Colorado"},
+  CT:{bg:"#fff",border:"#003087",tc:"#003087",ac:"#003087",sl:"Constitution State"},
+  DE:{bg:"#ffd700",border:"#003087",tc:"#003087",ac:"#003087",sl:"The First State"},
+  FL:{bg:"#f5f5f5",border:"#ff6600",tc:"#003087",ac:"#ff6600",sl:"Sunshine State"},
+  GA:{bg:"#fff",border:"#cc0000",tc:"#cc0000",ac:"#cc0000",sl:"Peach State"},
+  HI:{bg:"#00a86b",border:"#003087",tc:"#fff",ac:"#ffd700",sl:"Aloha State"},
+  ID:{bg:"#fff",border:"#003087",tc:"#003087",ac:"#cc0000",sl:"Famous Potatoes"},
+  IL:{bg:"#fff",border:"#003087",tc:"#003087",ac:"#003087",sl:"Land of Lincoln"},
+  IN:{bg:"#003087",border:"#ffd700",tc:"#ffd700",ac:"#ffd700",sl:"Crossroads of America"},
+  IA:{bg:"#fff",border:"#003087",tc:"#003087",ac:"#003087",sl:"Hawkeye State"},
+  KS:{bg:"#fff",border:"#003087",tc:"#003087",ac:"#ffd700",sl:"Sunflower State"},
+  KY:{bg:"#003087",border:"#ffd700",tc:"#ffd700",ac:"#ffd700",sl:"Bluegrass State"},
+  LA:{bg:"#fff",border:"#cc0000",tc:"#003087",ac:"#cc0000",sl:"Sportsman's Paradise"},
+  ME:{bg:"#fff",border:"#003087",tc:"#003087",ac:"#228b22",sl:"Vacationland"},
+  MD:{bg:"#ffd700",border:"#cc0000",tc:"#003087",ac:"#cc0000",sl:"Old Line State"},
+  MA:{bg:"#fff",border:"#003087",tc:"#003087",ac:"#228b22",sl:"Spirit of America"},
+  MI:{bg:"#fff",border:"#003087",tc:"#003087",ac:"#228b22",sl:"Great Lakes State"},
+  MN:{bg:"#fff",border:"#003087",tc:"#003087",ac:"#228b22",sl:"10,000 Lakes"},
+  MS:{bg:"#fff",border:"#003087",tc:"#003087",ac:"#228b22",sl:"Magnolia State"},
+  MO:{bg:"#fff",border:"#003087",tc:"#003087",ac:"#ffd700",sl:"Show-Me State"},
+  MT:{bg:"#fff",border:"#003087",tc:"#003087",ac:"#ffd700",sl:"Big Sky Country"},
+  NE:{bg:"#003087",border:"#ffd700",tc:"#ffd700",ac:"#ffd700",sl:"The Good Life"},
+  NV:{bg:"#003087",border:"#c0c0c0",tc:"#c0c0c0",ac:"#c0c0c0",sl:"Battle Born"},
+  NH:{bg:"#fff",border:"#228b22",tc:"#228b22",ac:"#228b22",sl:"Live Free or Die"},
+  NJ:{bg:"#ffd700",border:"#003087",tc:"#003087",ac:"#003087",sl:"Garden State"},
+  NM:{bg:"#ffd700",border:"#cc0000",tc:"#cc0000",ac:"#cc0000",sl:"Land of Enchantment"},
+  NY:{bg:"#fff",border:"#ff8c00",tc:"#003087",ac:"#ff8c00",sl:"Excelsior"},
+  NC:{bg:"#fff",border:"#cc0000",tc:"#003087",ac:"#cc0000",sl:"First in Flight"},
+  ND:{bg:"#003087",border:"#cc0000",tc:"#fff",ac:"#cc0000",sl:"Peace Garden State"},
+  OH:{bg:"#fff",border:"#cc0000",tc:"#003087",ac:"#cc0000",sl:"Birthplace of Aviation"},
+  OK:{bg:"#003087",border:"#ffd700",tc:"#ffd700",ac:"#ffd700",sl:"Native America"},
+  OR:{bg:"#003087",border:"#ffd700",tc:"#ffd700",ac:"#ffd700",sl:"Pacific Wonderland"},
+  PA:{bg:"#fff",border:"#003087",tc:"#003087",ac:"#ffd700",sl:"Keystone State"},
+  RI:{bg:"#fff",border:"#003087",tc:"#003087",ac:"#ffd700",sl:"Ocean State"},
+  SC:{bg:"#003087",border:"#fff",tc:"#fff",ac:"#fff",sl:"Smiling Faces"},
+  SD:{bg:"#fff",border:"#003087",tc:"#003087",ac:"#ffd700",sl:"Great Faces"},
+  TN:{bg:"#fff",border:"#cc0000",tc:"#003087",ac:"#cc0000",sl:"Volunteer State"},
+  TX:{bg:"#fff",border:"#cc0000",tc:"#003087",ac:"#cc0000",sl:"The Lone Star State"},
+  UT:{bg:"#fff",border:"#228b22",tc:"#003087",ac:"#cc0000",sl:"Life Elevated"},
+  VT:{bg:"#228b22",border:"#ffd700",tc:"#fff",ac:"#ffd700",sl:"Green Mountain State"},
+  VA:{bg:"#fff",border:"#003087",tc:"#003087",ac:"#003087",sl:"Virginia is for Lovers"},
+  WA:{bg:"#228b22",border:"#fff",tc:"#fff",ac:"#fff",sl:"Evergreen State"},
+  WV:{bg:"#fff",border:"#003087",tc:"#003087",ac:"#ffd700",sl:"Wild and Wonderful"},
+  WI:{bg:"#fff",border:"#003087",tc:"#003087",ac:"#ffd700",sl:"America's Dairyland"},
+  WY:{bg:"#fff",border:"#003087",tc:"#003087",ac:"#cc7722",sl:"The Cowboy State"},
+  DC:{bg:"#fff",border:"#cc0000",tc:"#cc0000",ac:"#cc0000",sl:"Taxation Without Representation"}
+};
+
+function makePlate(abbr, w=320){
+  const p=PLATES[abbr]||{bg:"#fff",border:"#333",tc:"#333",ac:"#333",sl:""};
+  const h=Math.round(w*0.5);
+  const r=Math.round(w*0.04);
+  const bw=Math.round(w*0.025);
+  const br=Math.round(w*0.018);
+  const boltY=Math.round(h*0.5);
+  const boltX1=Math.round(w*0.1);
+  const boltX2=Math.round(w*0.9);
+  const numSize=Math.round(w*0.19);
+  const abbrSize=Math.round(w*0.095);
+  const slSize=Math.round(w*0.065);
+  const numY=Math.round(h*0.62);
+  const abbrY=Math.round(h*0.25);
+  const slY=Math.round(h*0.88);
+  return `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">
+    <rect x="0" y="0" width="${w}" height="${h}" rx="${r}" fill="${p.border}"/>
+    <rect x="${bw}" y="${bw}" width="${w-bw*2}" height="${h-bw*2}" rx="${r-2}" fill="${p.bg}"/>
+    <circle cx="${boltX1}" cy="${boltY}" r="${br}" fill="${p.border}" opacity="0.5"/>
+    <circle cx="${boltX2}" cy="${boltY}" r="${br}" fill="${p.border}" opacity="0.5"/>
+    <text x="${w/2}" y="${abbrY}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${abbrSize}" font-weight="700" fill="${p.ac}" letter-spacing="2">${abbr}</text>
+    <text x="${w/2}" y="${numY}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${numSize}" font-weight="900" fill="${p.tc}" letter-spacing="3">ABC·123</text>
+    <text x="${w/2}" y="${slY}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${slSize}" fill="${p.ac}" letter-spacing="1">${p.sl}</text>
+  </svg>`;
+}
+
+// ===== State facts =====
+const STATE_FACTS = {
+  AL:{name:"Alabama",nick:"Heart of Dixie",bird:"Northern Flicker",flower:"Camellia",motto:"We Dare Defend Our Rights",fun:"Alabama was the first state to declare Christmas a legal holiday, back in 1836."},
+  AK:{name:"Alaska",nick:"The Last Frontier",bird:"Willow Ptarmigan",flower:"Forget-Me-Not",motto:"North to the Future",fun:"Alaska has more coastline than all other US states combined."},
+  AZ:{name:"Arizona",nick:"Grand Canyon State",bird:"Cactus Wren",flower:"Saguaro Cactus Blossom",motto:"God Enriches",fun:"The Grand Canyon is up to 18 miles wide and 277 miles long."},
+  AR:{name:"Arkansas",nick:"Natural State",bird:"Mockingbird",flower:"Apple Blossom",motto:"The People Rule",fun:"Arkansas is the only US state that produces diamonds commercially."},
+  CA:{name:"California",nick:"Golden State",bird:"California Quail",flower:"Golden Poppy",motto:"Eureka",fun:"California has both the tallest and oldest trees in the world."},
+  CO:{name:"Colorado",nick:"Centennial State",bird:"Lark Bunting",flower:"Rocky Mountain Columbine",motto:"Nothing Without Providence",fun:"Colorado averages over 300 days of sunshine per year — more than Miami."},
+  CT:{name:"Connecticut",nick:"Constitution State",bird:"American Robin",flower:"Mountain Laurel",motto:"He Who Transplanted Still Sustains",fun:"Connecticut enacted the first speed limit law in the US — 12 mph in 1901."},
+  DE:{name:"Delaware",nick:"First State",bird:"Blue Hen Chicken",flower:"Peach Blossom",motto:"Liberty and Independence",fun:"Delaware was the first state to ratify the US Constitution on December 7, 1787."},
+  FL:{name:"Florida",nick:"Sunshine State",bird:"Mockingbird",flower:"Orange Blossom",motto:"In God We Trust",fun:"Florida has more golf courses than any other state — over 1,100."},
+  GA:{name:"Georgia",nick:"Peach State",bird:"Brown Thrasher",flower:"Cherokee Rose",motto:"Wisdom, Justice, and Moderation",fun:"Georgia produces about 45% of the world's peanuts."},
+  HI:{name:"Hawaii",nick:"Aloha State",bird:"Nene (Hawaiian Goose)",flower:"Yellow Hibiscus",motto:"The Life of the Land is Perpetuated in Righteousness",fun:"Hawaii is the only US state that grows coffee commercially."},
+  ID:{name:"Idaho",nick:"Gem State",bird:"Mountain Bluebird",flower:"Syringa",motto:"Let It Be Perpetual",fun:"Idaho produces about one-third of all potatoes grown in the US."},
+  IL:{name:"Illinois",nick:"Prairie State",bird:"Northern Cardinal",flower:"Violet",motto:"State Sovereignty, National Union",fun:"Illinois is the birthplace of both Abraham Lincoln and Ronald Reagan."},
+  IN:{name:"Indiana",nick:"Hoosier State",bird:"Northern Cardinal",flower:"Peony",motto:"The Crossroads of America",fun:"The Indy 500 is the world's largest single-day sporting event by attendance."},
+  IA:{name:"Iowa",nick:"Hawkeye State",bird:"Eastern Goldfinch",flower:"Wild Prairie Rose",motto:"Our Liberties We Prize and Our Rights We Will Maintain",fun:"Iowa produces about 17% of the world's corn supply."},
+  KS:{name:"Kansas",nick:"Sunflower State",bird:"Western Meadowlark",flower:"Sunflower",motto:"To the Stars Through Difficulties",fun:"Kansas is the geographic center of the contiguous United States."},
+  KY:{name:"Kentucky",nick:"Bluegrass State",bird:"Northern Cardinal",flower:"Goldenrod",motto:"United We Stand, Divided We Fall",fun:"Kentucky has more miles of running water than any state except Alaska."},
+  LA:{name:"Louisiana",nick:"Pelican State",bird:"Brown Pelican",flower:"Magnolia",motto:"Union, Justice and Confidence",fun:"New Orleans hosts Mardi Gras, one of the world's largest annual festivals."},
+  ME:{name:"Maine",nick:"Pine Tree State",bird:"Black-capped Chickadee",flower:"White Pine Cone and Tassel",motto:"I Lead",fun:"Maine is the only US state with a one-syllable name."},
+  MD:{name:"Maryland",nick:"Old Line State",bird:"Baltimore Oriole",flower:"Black-eyed Susan",motto:"Manly Deeds, Womanly Words",fun:"The Star-Spangled Banner was written during the Battle of Baltimore in Maryland."},
+  MA:{name:"Massachusetts",nick:"Bay State",bird:"Black-capped Chickadee",flower:"Mayflower",motto:"By the Sword We Seek Peace, but Peace Only Under Liberty",fun:"Basketball was invented in Springfield, Massachusetts in 1891."},
+  MI:{name:"Michigan",nick:"Great Lakes State",bird:"American Robin",flower:"Apple Blossom",motto:"If You Seek a Pleasant Peninsula, Look About You",fun:"Michigan is the only US state consisting of two separate peninsulas."},
+  MN:{name:"Minnesota",nick:"Land of 10,000 Lakes",bird:"Common Loon",flower:"Pink and White Lady's Slipper",motto:"Star of the North",fun:"Minnesota actually has over 11,842 lakes — far more than its nickname suggests."},
+  MS:{name:"Mississippi",nick:"Magnolia State",bird:"Mockingbird",flower:"Magnolia",motto:"By Valor and Arms",fun:"The blues music genre originated in the Mississippi Delta region."},
+  MO:{name:"Missouri",nick:"Show Me State",bird:"Eastern Bluebird",flower:"White Hawthorn Blossom",motto:"The Welfare of the People Shall Be the Supreme Law",fun:"The ice cream cone was invented at the 1904 St. Louis World's Fair in Missouri."},
+  MT:{name:"Montana",nick:"Treasure State",bird:"Western Meadowlark",flower:"Bitterroot",motto:"Gold and Silver",fun:"Montana has three times as many cattle as people."},
+  NE:{name:"Nebraska",nick:"Cornhusker State",bird:"Western Meadowlark",flower:"Goldenrod",motto:"Equality Before the Law",fun:"The Reuben sandwich was invented in Omaha, Nebraska in 1925."},
+  NV:{name:"Nevada",nick:"Silver State",bird:"Mountain Bluebird",flower:"Sagebrush",motto:"Battle Born",fun:"Nevada is the driest state in the US, averaging only about 10 inches of rain per year."},
+  NH:{name:"New Hampshire",nick:"Granite State",bird:"Purple Finch",flower:"Purple Lilac",motto:"Live Free or Die",fun:"Mt. Washington once recorded the world's highest surface wind speed: 231 mph in 1934."},
+  NJ:{name:"New Jersey",nick:"Garden State",bird:"Eastern Goldfinch",flower:"Common Blue Violet",motto:"Liberty and Prosperity",fun:"New Jersey has more diners than any other state — the Diner Capital of the World."},
+  NM:{name:"New Mexico",nick:"Land of Enchantment",bird:"Greater Roadrunner",flower:"Yucca Flower",motto:"It Grows As It Goes",fun:"White Sands in New Mexico is the world's largest gypsum sand dune field."},
+  NY:{name:"New York",nick:"Empire State",bird:"Eastern Bluebird",flower:"Rose",motto:"Excelsior",fun:"New York City's subway runs 24/7 — the only major system in the world to do so."},
+  NC:{name:"North Carolina",nick:"Tar Heel State",bird:"Northern Cardinal",flower:"Dogwood",motto:"To Be Rather Than to Seem",fun:"The Wright Brothers made the first powered airplane flight at Kitty Hawk, NC in 1903."},
+  ND:{name:"North Dakota",nick:"Peace Garden State",bird:"Western Meadowlark",flower:"Wild Prairie Rose",motto:"Liberty and Union, Now and Forever",fun:"Rugby, North Dakota is the geographic center of North America."},
+  OH:{name:"Ohio",nick:"Buckeye State",bird:"Northern Cardinal",flower:"Scarlet Carnation",motto:"With God, All Things Are Possible",fun:"Ohio has produced more US presidents than any other state — eight total."},
+  OK:{name:"Oklahoma",nick:"Sooner State",bird:"Scissor-tailed Flycatcher",flower:"Mistletoe",motto:"Labor Conquers All Things",fun:"Oklahoma is the only state with an official state meal, featuring 11 dishes."},
+  OR:{name:"Oregon",nick:"Beaver State",bird:"Western Meadowlark",flower:"Oregon Grape",motto:"She Flies With Her Own Wings",fun:"Crater Lake is the deepest lake in the US at 1,949 feet deep."},
+  PA:{name:"Pennsylvania",nick:"Keystone State",bird:"Ruffed Grouse",flower:"Mountain Laurel",motto:"Virtue, Liberty and Independence",fun:"The first US zoo opened in Philadelphia in 1874."},
+  RI:{name:"Rhode Island",nick:"Ocean State",bird:"Rhode Island Red",flower:"Violet",motto:"Hope",fun:"Rhode Island is the smallest state but has the longest official name."},
+  SC:{name:"South Carolina",nick:"Palmetto State",bird:"Carolina Wren",flower:"Yellow Jessamine",motto:"While I Breathe, I Hope",fun:"South Carolina was the first state to secede from the Union before the Civil War."},
+  SD:{name:"South Dakota",nick:"Mount Rushmore State",bird:"Chinese Ring-necked Pheasant",flower:"Pasque Flower",motto:"Under God the People Rule",fun:"The Badlands of South Dakota contain some of the world's richest fossil beds."},
+  TN:{name:"Tennessee",nick:"Volunteer State",bird:"Mockingbird",flower:"Iris",motto:"Agriculture and Commerce",fun:"Tennessee is home to more than 50% of all bat species found in the United States."},
+  TX:{name:"Texas",nick:"Lone Star State",bird:"Mockingbird",flower:"Bluebonnet",motto:"Friendship",fun:"Texas is so large you could fit 220 Rhode Islands inside it."},
+  UT:{name:"Utah",nick:"Beehive State",bird:"California Gull",flower:"Sego Lily",motto:"Industry",fun:"Utah's Bonneville Salt Flats are so flat you can see the curvature of the Earth."},
+  VT:{name:"Vermont",nick:"Green Mountain State",bird:"Hermit Thrush",flower:"Red Clover",motto:"Freedom and Unity",fun:"Vermont produces about 40% of all maple syrup made in the United States."},
+  VA:{name:"Virginia",nick:"Old Dominion",bird:"Northern Cardinal",flower:"American Dogwood",motto:"Thus Always to Tyrants",fun:"Eight US presidents were born in Virginia — more than any other state."},
+  WA:{name:"Washington",nick:"Evergreen State",bird:"Willow Goldfinch",flower:"Coast Rhododendron",motto:"Al-ki (By and By)",fun:"Washington is the only US state named after a president."},
+  WV:{name:"West Virginia",nick:"Mountain State",bird:"Cardinal",flower:"Rhododendron",motto:"Mountaineers Are Always Free",fun:"West Virginia is the only state formed by breaking away from a Confederate state."},
+  WI:{name:"Wisconsin",nick:"Badger State",bird:"American Robin",flower:"Wood Violet",motto:"Forward",fun:"Wisconsin produces about 25% of all cheese made in the United States."},
+  WY:{name:"Wyoming",nick:"Equality State",bird:"Western Meadowlark",flower:"Indian Paintbrush",motto:"Equal Rights",fun:"Wyoming was the first state to grant women the right to vote, in 1869."},
+  DC:{name:"Washington D.C.",nick:"Nation's Capital",bird:"Wood Thrush",flower:"American Beauty Rose",motto:"Justice for All",fun:"Washington D.C. has more museum visitors per year than any other city in the world."}
+};
+
+const FIPS={"01":"AL","02":"AK","04":"AZ","05":"AR","06":"CA","08":"CO","09":"CT","10":"DE","11":"DC","12":"FL","13":"GA","15":"HI","16":"ID","17":"IL","18":"IN","19":"IA","20":"KS","21":"KY","22":"LA","23":"ME","24":"MD","25":"MA","26":"MI","27":"MN","28":"MS","29":"MO","30":"MT","31":"NE","32":"NV","33":"NH","34":"NJ","35":"NM","36":"NY","37":"NC","38":"ND","39":"OH","40":"OK","41":"OR","42":"PA","44":"RI","45":"SC","46":"SD","47":"TN","48":"TX","49":"UT","50":"VT","51":"VA","53":"WA","54":"WV","55":"WI","56":"WY"};
+
+const FOUND_COLOR = '#2f6fb0';
+const UNFOUND_COLOR = '#eef0f3';
+const SELECTED_COLOR = '#2e9e5b';
+
+// ===== App state =====
+let games=[]; let activeId=null; let selAbbr=null; let curScr='games';
+try{
+  games=JSON.parse(localStorage.getItem('lp_online_games')||'[]');
+  activeId=localStorage.getItem('lp_online_active')||null;
+}catch(e){}
+
+function save(){
+  try{
+    localStorage.setItem('lp_online_games', JSON.stringify(games));
+    localStorage.setItem('lp_online_active', activeId||'');
+  }catch(e){}
+}
+function getGame(){return games.find(g=>g.id===activeId)}
+
+function showScr(name){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('scr-'+name).classList.add('active');
+  document.getElementById('nb-'+name).classList.add('active');
+  curScr=name;
+  const g=getGame();
+  document.getElementById('hdr-title').textContent = g && name!=='games' ? g.name : 'License Plate Tracker';
+  if(name==='games') renderGames();
+  if(name==='map'){ renderMap(); if(selAbbr) renderFact('fact-map'); }
+  if(name==='states') renderStates();
+}
+
+function renderGames(){
+  const list=document.getElementById('games-list');
+  const empty=document.getElementById('games-empty');
+  document.getElementById('nav-bar').style.display = games.length ? 'flex' : 'none';
+  if(!games.length){ list.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  list.innerHTML = games.map(g=>{
+    const pct = Math.round(g.found.length/51*100);
+    return `<div class="game-card ${g.id===activeId?'sel':''}" onclick="selectGame('${g.id}')">
+      <div style="width:40px;height:40px;border-radius:11px;background:var(--blue-light);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--blue-dark)" stroke-width="2" style="width:19px;height:19px"><path d="M5 17h14M5 17a2 2 0 0 1-2-2v-3.5a2 2 0 0 1 .5-1.32l1.7-2.04A2 2 0 0 1 6.75 7h10.5a2 2 0 0 1 1.55.74l1.7 2.04a2 2 0 0 1 .5 1.32V15a2 2 0 0 1-2 2M7 17v2m10-2v2"/><circle cx="7" cy="14" r="1"/><circle cx="17" cy="14" r="1"/></svg>
+      </div>
+      <div style="flex:1">
+        <div style="font-size:15px;font-weight:600">${g.name}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">${g.found.length} / 51 states · ${pct}%</div>
+        <div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div>
+      </div>
+      <button class="delete-btn" onclick="event.stopPropagation();deleteGame('${g.id}')" aria-label="Delete">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z"/></svg>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function selectGame(id){
+  activeId=id; save();
+  document.getElementById('nav-bar').style.display='flex';
+  selAbbr=null;
+  showScr('states');
+}
+function deleteGame(id){
+  games=games.filter(g=>g.id!==id);
+  if(activeId===id) activeId = games.length ? games[0].id : null;
+  save(); renderGames();
+}
+function openModal(){
+  document.getElementById('modal-overlay').classList.add('open');
+  document.getElementById('modal-input').value='';
+  setTimeout(()=>document.getElementById('modal-input').focus(),100);
+}
+function closeModal(){ document.getElementById('modal-overlay').classList.remove('open'); }
+function createGame(){
+  const name=document.getElementById('modal-input').value.trim();
+  if(!name) return;
+  const g={id:Date.now().toString(), name, found:[]};
+  games.push(g); activeId=g.id; save(); closeModal();
+  document.getElementById('nav-bar').style.display='flex';
+  selAbbr=null;
+  showScr('states');
+}
+
+function toggleState(abbr){
+  const g=getGame(); if(!g) return;
+  const i=g.found.indexOf(abbr);
+  if(i>=0) g.found.splice(i,1); else g.found.push(abbr);
+  save();
+  if(curScr==='map'){
+    const found=new Set(g.found);
+    paintMap(found);
+    document.getElementById('map-found').textContent=found.size;
+    document.getElementById('map-left').textContent=51-found.size;
+    selAbbr=abbr; renderFact('fact-map');
+  }
+  if(curScr==='states') renderStates();
+}
+
+function selectState(abbr){
+  selAbbr=abbr;
+  if(curScr==='map') renderFact('fact-map');
+}
+
+function renderFact(cid){
+  const el=document.getElementById(cid); if(!el||!selAbbr) return;
+  const f=STATE_FACTS[selAbbr]; const g=getGame();
+  const isFound = g && g.found.includes(selAbbr);
+  el.innerHTML = `
+    <div class="fact-panel">
+      <div class="fact-header">
+        <div class="fact-abbr">${selAbbr}</div>
+        <div><div class="fact-name">${f.name}</div><div class="fact-status">${isFound?'✓ Spotted':'Not spotted yet'}</div></div>
+      </div>
+      <div class="plate-section">
+        <div class="plate-section-label">License plate</div>
+        <div class="plate-svg-wrap" id="plate-slot-${cid}">${makePlate(selAbbr)}</div>
+      </div>
+      <div class="fact-body">
+        <div class="fact-row"><span class="fact-key">Nickname</span><span class="fact-val">${f.nick}</span></div>
+        <div class="fact-row"><span class="fact-key">State bird</span><span class="fact-val">${f.bird}</span></div>
+        <div class="fact-row"><span class="fact-key">Flower</span><span class="fact-val">${f.flower}</span></div>
+        <div class="fact-row"><span class="fact-key">Motto</span><span class="fact-val">${f.motto}</span></div>
+        <div class="fact-row"><span class="fact-key">Fun fact</span><span class="fact-val">${f.fun}</span></div>
+      </div>
+    </div>
+    <button class="spot-btn ${isFound?'on':''}" onclick="toggleState('${selAbbr}')">
+      ${isFound?'✓ Spotted — tap to unmark':'Mark as spotted'}
+    </button>`;
+}
+
+function renderStates(){
+  const g=getGame(); if(!g) return;
+  const found=new Set(g.found);
+  const q=document.getElementById('state-search').value.toLowerCase();
+  const items=Object.entries(STATE_FACTS)
+    .filter(([a,f])=>f.name.toLowerCase().includes(q)||a.toLowerCase().includes(q))
+    .sort((a,b)=>a[1].name.localeCompare(b[1].name));
+  document.getElementById('state-list').innerHTML = items.map(([abbr,f])=>`
+    <div class="state-item ${found.has(abbr)?'found-row':''}" onclick="toggleState('${abbr}')">
+      <div class="state-check ${found.has(abbr)?'on':''}">${found.has(abbr)?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>':''}</div>
+      <div class="state-item-name">${f.name}</div>
+      <div class="state-item-abbr">${abbr}</div>
+    </div>`).join('');
+}
+
+function paintMap(found){
+  document.querySelectorAll('#us-svg path[data-abbr]').forEach(p=>{
+    const abbr=p.dataset.abbr;
+    if(abbr===selAbbr){
+      p.setAttribute('fill', SELECTED_COLOR);
+      p.setAttribute('stroke-width','2');
+    }else{
+      p.setAttribute('fill', found.has(abbr) ? FOUND_COLOR : UNFOUND_COLOR);
+      p.setAttribute('stroke-width','1');
+    }
+  });
+}
+
+let mapLoaded=false;
+async function renderMap(){
+  const g=getGame(); if(!g) return;
+  const found=new Set(g.found);
+  document.getElementById('map-found').textContent=found.size;
+  document.getElementById('map-left').textContent=51-found.size;
+  const svg=document.getElementById('us-svg');
+  if(mapLoaded){ paintMap(found); return; }
+  svg.innerHTML='<text x="487" y="305" text-anchor="middle" font-size="16" fill="#9aa1ad">Loading map…</text>';
+  try{
+    const res=await fetch('https://cdn.jsdelivr.net/npm/us-atlas@3/states-albers-10m.json');
+    const us=await res.json();
+    const states=topojson.feature(us,us.objects.states);
+    const path=d3.geoPath();
+    svg.innerHTML='';
+    states.features.forEach(f=>{
+      const fips=String(f.id).padStart(2,'0');
+      const abbr=FIPS[fips]; if(!abbr) return;
+      const d=path(f); if(!d) return;
+      const el=document.createElementNS('http://www.w3.org/2000/svg','path');
+      el.setAttribute('d',d);
+      el.setAttribute('fill', found.has(abbr)?FOUND_COLOR:UNFOUND_COLOR);
+      el.setAttribute('stroke','#ffffff');
+      el.setAttribute('stroke-width','1');
+      el.dataset.abbr=abbr;
+      el.style.cursor='pointer';
+      el.style.touchAction='manipulation';
+      const handleTap=()=>{
+        selectState(abbr);
+        renderFact('fact-map');
+        const g2=getGame();
+        if(g2) paintMap(new Set(g2.found));
+      };
+      el.addEventListener('click',handleTap);
+      el.addEventListener('touchend',(e)=>{e.preventDefault();handleTap();},{passive:false});
+      const title=document.createElementNS('http://www.w3.org/2000/svg','title');
+      title.textContent=STATE_FACTS[abbr]?STATE_FACTS[abbr].name:abbr;
+      el.appendChild(title);
+      svg.appendChild(el);
+    });
+    mapLoaded=true;
+  }catch(e){
+    svg.innerHTML='<text x="487" y="305" text-anchor="middle" font-size="14" fill="#9aa1ad">Map needs internet — check your connection</text>';
+  }
+}
+
+renderGames();
+</script>
+</body>
+</html>
